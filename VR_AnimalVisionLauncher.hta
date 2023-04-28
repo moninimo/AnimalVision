@@ -1,0 +1,177 @@
+<html>
+  <head>
+    <HTA:APPLICATION ID='oHTA' MAXIMIZEBUTTON='no' MINIMIZEBUTTON='no'/>
+  </head>
+  <body scroll='no'>
+    <form id='MAIN' name='radioForm' onSubmit='OnSubmit(); return false'>
+      <div>
+        <label>
+          <input type='radio' name='radios' id='0' checked='checked' />
+          Add log header notes for a new session (line breaks become spaces)
+        </label>
+        <div style='padding-left:30px'>
+          <textarea id='id_textareaLogHeader' rows='10' style='width:99%; overflow-y: scroll'></textarea>
+        </div>
+      </div>
+      <div>
+        <label>
+          <input type='radio' name='radios' id='1' />
+          Omit the log header for the new session
+        </label>
+      </div>
+      <div>
+        <label>
+          <input type='radio' name='radios' id='2' />
+          Replay a log of a previous session
+        </label>
+        <div style='padding-left:30px'>
+          <div>
+            <label for='logs'>Choose a log:</label>
+            <select name='logs' id='id_selectLogs'></select>
+          </div>
+        </div>
+      </div>
+      <div>
+        Session parameters:
+        <textarea id='id_textareaParameters' rows=5 style='width:100%; overflow-y: scroll'></textarea>
+      </div>
+      <div>
+        <label for='id_logFilenameExtra'>Extra text in the log filename (spaces removed):</label>
+        <input type='text' id='id_logFilenameExtra' size='45'>
+      </div>
+      <div>
+        <label for='id_checkboxSaveFrames'>Save frames in the log directory</label>
+        <input type='checkbox' id='id_checkboxSaveFrames' style='width:40px; height:40px;'>
+      </div>
+      <div>
+        <input type='submit' value='Continue' />
+        <input type='button' value='Cancel' onClick='self.close()' />
+      </div>
+    </form>
+    <script language='javascript'>
+      var m = document.getElementById('MAIN');
+      var h = m.offsetHeight + 110;
+      window.resizeTo(2500, h);
+      window.focus();
+      function OnSubmit(event)
+      {
+        var r = document.forms.radioForm.radios;
+        if (r[0].checked)
+          action0();
+        else if (r[1].checked)
+          action1();
+        else if (r[2].checked)
+          actionKinematicSubject();
+        self.close();
+      }
+      function runApp(extraArgs)
+      {
+        writeParametersFile();
+        var args = extraArgs ? extraArgs : '';
+        var filenameExtra = document.getElementById('id_logFilenameExtra');
+        if (filenameExtra.value) {
+          var value = filenameExtra.value.replace(' ', '');
+          args += " -logFilenameExtra " + value;
+        }
+        var checkboxSaveFrames = document.getElementById('id_checkboxSaveFrames');
+        if (checkboxSaveFrames.checked) {
+          args += " -saveFrames ";
+        }
+        var sh = new ActiveXObject('Shell.Application');
+        var exe = 'C:\\Users\\monin\\VR_AnimalVision\\Code\\VR_AnimalVision\\VR_AnimalVision.lnk';
+        sh.ShellExecute(exe, args, '', 'open', '1');
+      }
+    </script>
+    <script language='javascript'>
+      function LogDir()
+      {
+        var o = new ActiveXObject('WScript.Shell');
+        if (o) {
+          var appData = o.expandEnvironmentStrings('%AppData%');
+          return appData.substring(0, appData.lastIndexOf('\\') + 1) + 'LocalLow\\Imperial\\VR_AnimalVision';
+        }
+        return '';
+      }
+      var textarea = document.getElementById('id_textareaLogHeader');
+      var fso = new ActiveXObject('Scripting.FileSystemObject');
+      var logHeaderPath = LogDir() + '\\LogHeader.txt';
+      if (fso.FileExists(logHeaderPath)) {
+        var tso = fso.OpenTextFile(logHeaderPath, 1);
+        if (tso) {
+          var text = tso.ReadAll();
+          textarea.value = text;
+        }
+      }
+      function action0()
+      {
+        var text = textarea.value;
+        if (text) {
+          var tso = fso.OpenTextFile(logHeaderPath, 2, true);
+          tso.WriteLine(text);
+          runApp('-addLogHeader');
+        } else {
+          runApp();
+        }
+      }
+      function action1()
+      {
+        runApp();
+      }
+    </script>
+    <script language='javascript'>
+      var select = document.getElementById('id_selectLogs');
+      var fso = new ActiveXObject('Scripting.FileSystemObject');
+      var folderPath = LogDir();
+      if (fso.FolderExists(folderPath)) {
+        var folder = fso.GetFolder(folderPath);
+        var files = [];
+        for (var en = new Enumerator(folder.Files); !en.atEnd(); en.moveNext()) {
+          var s = en.item();
+          if (/Log.*json/.test(s))
+            files.push(s);
+        }
+        files.sort();
+        for (var i = files.length - 1; i >= 0; i--)
+          select.add(new Option(files[i], files[i]));
+      }
+      if (select.options.length === 0) {
+        select.add(new Option('No logs', 0));
+        select.disabled = true;
+      }
+      function actionKinematicSubject()
+      {
+        var extra = '-playback ' + document.getElementById('id_selectLogs').value;
+        runApp(extra);
+      }
+    </script>
+    <script language='javascript'>
+      var textareaParameters = document.getElementById('id_textareaParameters');
+      var fso = new ActiveXObject('Scripting.FileSystemObject');
+      var parametersPath = LogDir() + '\\SessionParameters.json';
+      if (!fso.FileExists(parametersPath)) {
+        var buildDir = 'C:\\Users\\monin\\VR_AnimalVision\\Code\\VR_AnimalVision\\Build';
+        var parametersAtBuildPath = buildDir + '\\SessionParameters.json';
+        if (fso.FileExists(parametersAtBuildPath)) {
+          fso.CopyFile(parametersAtBuildPath, parametersPath);
+        } else {
+          alert('Missing "SessionParameters.json".  Please rebuild.');
+        }
+      }
+      if (fso.FileExists(parametersPath)) {
+        var tso = fso.OpenTextFile(parametersPath, 1);
+        if (tso) {
+          var text = tso.ReadAll();
+          textareaParameters.value = text;
+        }
+      }
+      function writeParametersFile()
+      {
+        var tso = fso.OpenTextFile(parametersPath, 2, true);
+        if (tso) {
+          var text = textareaParameters.value;
+          tso.WriteLine(text);
+        }
+      }
+    </script>
+  </body>
+</html>
